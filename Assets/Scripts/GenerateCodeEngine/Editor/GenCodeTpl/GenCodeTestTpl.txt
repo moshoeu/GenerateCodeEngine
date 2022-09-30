@@ -1,0 +1,25 @@
+﻿using Framework.Editor;
+
+public class GenCodeTestTpl : GenCodeTplBase
+{
+    public override void Build()
+    {
+
+
+<%namespace Runtime.Logic
+{
+%>
+        string typeName = (string)m_Data;
+    <%public class %><%=typeName%>
+    <%{
+
+    }%>
+<%}%>
+    }
+
+
+}
+
+
+
+

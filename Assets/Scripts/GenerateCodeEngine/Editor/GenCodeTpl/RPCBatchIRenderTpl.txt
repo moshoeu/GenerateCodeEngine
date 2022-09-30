@@ -1,0 +1,55 @@
+﻿using Framework.Editor;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using UnityEngine;
+
+public class RPCBatchIRenderTpl : GenCodeTplBase
+{
+    public override void Build(out string fileName)
+    {
+        var desc = m_Data as RPCBatchGenFileDesc;
+
+        string nameSpaceName = desc.m_Namespace.Replace(".", "");
+        fileName = $"{nameSpaceName}RPCBatchIRender";
+        string[] ignoreNamespace = new string[1] { desc.m_Namespace };
+
+<%/******************************************************************%>
+<%@n                该代码为自动生成代码，请勿修改！                  %>
+<%@n*******************************************************************/%>
+
+        <%@n@nnamespace %><%=desc.m_Namespace%><%{%>
+
+        string interfaceName = $"IRender{nameSpaceName}";
+        <%@n@tpublic interface %><%=interfaceName%><%{%>
+        
+        foreach (var method in desc.m_RefMethods)
+        {
+            string methodSign = "";
+            string methodCall = "";
+
+            var methodArgs = method.GetParameters();
+            for (int i = 0; i < methodArgs.Length; i++)
+            {
+                var arg = methodArgs[i];
+                string prefix = i == 0 ? "" : ", ";
+                string sign = $"{GetFullTypeName(arg.ParameterType, ignoreNamespace)} {arg.Name}";
+
+                methodCall += $"{prefix}{sign}";
+            }
+            methodSign = $"public void {method.Name}({methodCall});";
+
+            <%@n@t@t%><%=methodSign%>
+        }
+
+        <%@n@t}%>
+
+
+
+        <%@n}%>
+    }
+}
+
+
+
+

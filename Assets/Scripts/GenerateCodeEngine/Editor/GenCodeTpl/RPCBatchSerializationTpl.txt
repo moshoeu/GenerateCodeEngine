@@ -1,0 +1,234 @@
+﻿using Framework.Editor;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using UnityEngine;
+
+public class RPCBatchSerializationTpl : GenCodeTplBase
+{
+    public override void Build(out string fileName)
+    {
+        var desc = m_Data as RPCBatchGenFileDesc;
+
+        string nameSpaceName = desc.m_Namespace.Replace(".", "");
+        fileName = $"{nameSpaceName}RPCBatchSerialization";
+        string[] ignoreNamespace = new string[1] { desc.m_Namespace };
+
+<%/******************************************************************%>
+<%@n                该代码为自动生成代码，请勿修改！                  %>
+<%@n*******************************************************************/%>
+
+        <%@nusing System.IO;%>
+        <%@nusing UnityEngine;%>
+        <%@n@nnamespace %><%=desc.m_Namespace%><%{%>
+
+        foreach (var method in desc.m_RefMethods)
+        {
+            string methodName = method.Name;
+            string structName = $"{methodName}Arguments";
+
+            <%@n@tpublic struct %><%=structName%><%{%>
+            foreach (var arg in method.GetParameters())
+            {
+                string argSign = $"public {GetFullTypeName(arg.ParameterType, ignoreNamespace)} {arg.Name};";
+                <%@n@t@t%><%=argSign%>
+            }
+
+            // 序列化方法
+            <%@n@t@tpublic byte[] Serialize() {%>
+            <%@n@t@t@tusing (MemoryStream ms = new MemoryStream()){%>
+            <%@n@t@t@t@tBinaryWriter bw = new BinaryWriter(ms);%>
+            foreach (var arg in method.GetParameters())
+            {
+                List<string> segs = GetWriteSegs(arg);
+                foreach (string seg in segs)
+                {
+                    <%@n@t@t@t@t%><%=seg%>
+                }
+            }
+            <%@n@t@t@t@treturn ms.ToArray();%>
+            <%@n@t@t@t}%>
+            <%@n@t@t}%>
+
+            // 反序列化方法
+            <%@n@t@tpublic void Deserialize(byte[] data) {%>
+            <%@n@t@t@tusing (MemoryStream ms = new MemoryStream(data)){%>
+            <%@n@t@t@t@tBinaryReader br = new BinaryReader(ms);%>
+            foreach (var arg in method.GetParameters())
+            {
+                List<string> segs = GetReadSegs(arg);
+                foreach (string seg in segs)
+                {
+                    <%@n@t@t@t@t%><%=seg%>
+                }
+            }
+            <%@n@t@t@t}%>
+            <%@n@t@t}%>
+
+            <%@n@t}%>
+        }
+
+        <%@n}%>
+    }
+
+    #region 写入
+    private List<string> GetWriteSegs(ParameterInfo info)
+    {
+        return InternalGetWriteSegs(info.ParameterType, info.Name);
+    }
+
+    private List<string> InternalGetWriteSegs(Type argType, string argName)
+    {
+        List<string> segs = new List<string>();
+
+        if (m_easyWDType.Contains(argType))
+        {
+            segs.Add($"bw.Write({argName});");
+        }
+        else if (argType == typeof(byte[]) || argType == typeof(char[]))
+        {
+            segs.Add($"bw.Write({argName}.Length);bw.Write({argName});");
+        }
+
+        else if (argType == typeof(Vector2) || argType == typeof(Vector2Int))
+        {
+            segs.Add($"bw.Write({argName}.x);bw.Write({argName}.y);");
+        }
+        else if (argType == typeof(Vector3) || argType == typeof(Vector3Int))
+        {
+            segs.Add($"bw.Write({argName}.x);bw.Write({argName}.y);bw.Write({argName}.z);");
+        }
+        else if (argType == typeof(Vector4) || argType == typeof(Quaternion))
+        {
+            segs.Add($"bw.Write({argName}.x);bw.Write({argName}.y);bw.Write({argName}.z);bw.Write({argName}.w);");
+        }
+        // 一维数组
+        else if (argType.IsArray && argType.GetArrayRank() == 1)
+        {
+            var elmType = argType.GetElementType();
+            string elmName = $"elm_{argName}";
+            segs.Add($"bw.Write({argName}.Length);");
+            segs.Add($"foreach(var {elmName} in {argName}){{");
+            AddRangeWithTab(segs, InternalGetWriteSegs(elmType, elmName));
+            segs.Add("}");
+        }
+        else
+        {
+            throw new Exception($"RPCBatch生成序列化代码失败！[{argType}]为不支持的类型！");
+        }
+
+        return segs;
+    }
+
+    /// <summary>
+    /// 简单存储类
+    /// </summary>
+    #endregion
+
+    #region 读取
+    private List<string> GetReadSegs(ParameterInfo info)
+    {
+        return InternalGetReadSegs(info.ParameterType, info.Name);
+    }
+
+    private List<string> InternalGetReadSegs(Type argType, string argName)
+    {
+        List<string> segs = new List<string>();
+
+        if (m_easyWDType.Contains(argType))
+        {
+            segs.Add($"{argName} = br.Read{argType.Name}();");
+        }
+        else if (argType == typeof(byte[]))
+        {
+            segs.Add($"int length = br.ReadInt32();{argName} = br.ReadBytes(length);");
+        }
+        else if (argType == typeof(char[]))
+        {
+            segs.Add($"int length = br.ReadInt32();{argName} = br.ReadChars(length);");
+        }
+        else if (argType == typeof(Vector2))
+        {
+            segs.Add($"{argName} = new Vector2(br.ReadSingle(), br.ReadSingle());");
+        }
+        else if (argType == typeof(Vector2Int))
+        {
+            segs.Add($"{argName} = new Vector2Int(br.ReadInt32(), br.ReadInt32());");
+        }
+        else if (argType == typeof(Vector3))
+        {
+            segs.Add($"{argName} = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());");
+        }
+        else if (argType == typeof(Vector3Int))
+        {
+            segs.Add($"{argName} = new Vector3Int(br.ReadInt32(), br.ReadInt32(), br.ReadInt32());");
+        }
+        else if (argType == typeof(Vector4))
+        {
+            segs.Add($"{argName} = new Vector4(br.ReadSingle(), br.ReadSingle(), br.ReadSingle(), br.ReadSingle());");
+        }
+        else if (argType == typeof(Quaternion))
+        {
+            segs.Add($"{argName} = new Quaternion(br.ReadSingle(), br.ReadSingle(), br.ReadSingle(), br.ReadSingle());");
+        }
+
+        // 一维数组
+        else if (argType.IsArray && argType.GetArrayRank() == 1)
+        {
+            var elmType = argType.GetElementType();
+            
+            var elmFullName = GetFullTypeName(elmType);
+            int bracketIdx = elmFullName.IndexOf('[');
+
+            string argNameWithoutBracket = argName.Replace("[","__").Replace("]", "__");
+            string lengthName = $"len_{argNameWithoutBracket}";
+            segs.Add($"int {lengthName} = br.ReadInt32();");
+
+            if (bracketIdx != -1)
+            {
+                elmFullName = elmFullName.Insert(bracketIdx, $"[{lengthName}]");
+            }
+            else
+            {
+                elmFullName = $"{elmFullName}[{lengthName}]";
+            }
+
+            string idxName = $"idx_{argNameWithoutBracket}";
+            string elmName = $"{argName}[{idxName}]";
+
+            // 循环体
+            segs.Add($"{argName} = new {elmFullName};");
+            segs.Add($"for(int {idxName} = 0; {idxName} < {lengthName}; {idxName}++) {{");
+            AddRangeWithTab(segs, InternalGetReadSegs(elmType, elmName));
+            segs.Add("}");
+        }
+        else
+        {
+
+            throw new Exception($"RPCBatch生成反序列化代码失败！[{argType}]为不支持的类型！");
+        }
+
+        return segs;
+    }
+    #endregion
+
+    private void AddRangeWithTab(List<string> main, List<string> range)
+    {
+        for (int i = 0; i < range.Count; i++)
+        {
+            range[i] = $"\t{range[i]}";
+        }
+        main.AddRange(range);
+    }
+
+    private HashSet<Type> m_easyWDType = new HashSet<Type>()
+    {
+        typeof(int), typeof(byte), typeof(short), typeof(ushort), typeof(uint),
+        typeof(long), typeof(ulong), typeof(float), typeof(double), typeof(decimal),
+        typeof(string), typeof(bool), typeof(sbyte),
+    };
+}
+
+
+
+

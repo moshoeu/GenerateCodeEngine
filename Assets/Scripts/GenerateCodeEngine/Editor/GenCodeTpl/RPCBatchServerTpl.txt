@@ -1,0 +1,84 @@
+﻿using Framework.Editor;
+using System;
+using System.Collections.Generic;
+
+public class RPCBatchServerTpl : GenCodeTplBase
+{
+    public override void Build(out string fileName)
+    {
+        RPCBatchGenFileDesc desc = (RPCBatchGenFileDesc)m_Data;
+        string nameSpaceName = desc.m_Namespace.Replace(".", "");
+        string className = $"{nameSpaceName}RPCBatchServer";
+        string[] ignoreNamespace = new string[1] { desc.m_Namespace };
+        string interfaceName = $"IRender{nameSpaceName}";
+
+        fileName = className;
+
+<%/******************************************************************
+                该代码为自动生成代码，请勿修改！
+*******************************************************************/
+
+%>
+
+        <%namespace %><%=desc.m_Namespace%><%{%>
+        <%@n@tpublic class %><%=className%><% : %><%=interfaceName%><%{%>
+
+        // 成员声明
+        <%@n@t@tprivate readonly Framework.RPCBatchNetHolder m_holder;%>
+        <%@n@t@tprivate Framework.RPCBatchFrameCall m_tmpCalls = new Framework.RPCBatchFrameCall() { m_Calls = new System.Collections.Generic.List<Framework.RPCBatchSingleCall>() };%>
+        <%@n@t@tprivate int m_frameIdx = 0;%>
+
+        // 构造函数
+        string ctorSign = $"public {className}(Framework.RPCBatchNetHolder netHolder)";
+        <%@n@n@t@t%><%=ctorSign%><%{ m_holder = netHolder; }%>
+
+        ushort idDispatcher = 0;
+        // 成员函数
+        foreach (var method in desc.m_RefMethods)
+        {
+            string methodSign = "";
+            string methodCall = "";
+
+            var methodArgs = method.GetParameters();
+            for (int i = 0; i < methodArgs.Length; i++)
+            {
+                var arg = methodArgs[i];
+                string prefix = i == 0 ? "" : ", ";
+                string sign = $"{GetFullTypeName(arg.ParameterType, ignoreNamespace)} {arg.Name}";
+
+                methodCall += $"{prefix}{sign}";
+            }
+            methodSign = $"public void {method.Name}({methodCall})";
+
+            <%@n@n@t@t%><%=methodSign%><%{%>
+            <%@n@t@t@tvar call = new Framework.RPCBatchSingleCall();%>
+            <%@n@t@t@tcall.m_MethodID = %><%=idDispatcher++%><%;%>
+            if (methodArgs.Length > 0)
+            {
+                <%@n@t@t@tvar data = new %><%=method.Name%><%Arguments();%>
+                for (int i = 0; i < methodArgs.Length; i++)
+                {
+                    var arg = methodArgs[i];
+                    string str = $"data.{arg.Name} = {arg.Name};";
+                    <%@n@t@t@t%><%=str%>;
+                }
+                <%@n@t@t@tcall.m_Arguments = data.Serialize();%>
+            }
+            <%@n@t@t@tm_tmpCalls.m_Calls.Add(call);%>
+            <%@n@t@t}%>
+        }
+
+        <%
+
+        public void FrameCall(){
+            m_tmpCalls.m_FrameIdx = ++m_frameIdx;
+            m_holder?.FrameCall(m_tmpCalls);
+            m_tmpCalls.m_Calls.Clear();
+        }%>
+
+        <%@n@t}%>
+        <%@n}%>
+    }
+}
+
+
